@@ -1,61 +1,76 @@
+const CACHE_NAME = "static-cache-v3";
+const DATA_CACHE_NAME = "data-cache-v2";
+
 const FILES_TO_CACHE = [
-  '/',
   '/index.html',
   './styles.css',
   'https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css',
   './icons/icon-192x192.png',
   './icons/icon-512x512.png',
-  './dist/index.js'
+  './dist/index.js',
+  './dist/db.js'
 ];
 
-const PRECACHE = 'precache-v1';
-const RUNTIME = 'runtime';
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches
-      .open(PRECACHE)
-      .then((cache) => cache.addAll(FILES_TO_CACHE))
-      .then(self.skipWaiting())
+self.addEventListener("install", (evt) => {
+  evt.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => {
+      return cache.addAll(FILES_TO_CACHE);
+    })
   );
+
+  self.skipWaiting();
 });
 
-// The activate handler takes care of cleaning up old caches.
-self.addEventListener('activate', (event) => {
-  const currentCaches = [PRECACHE, RUNTIME];
-  event.waitUntil(
-    caches
-      .keys()
-      .then((cacheNames) => {
-        return cacheNames.filter((cacheName) => !currentCaches.includes(cacheName));
-      })
-      .then((cachesToDelete) => {
-        return Promise.all(
-          cachesToDelete.map((cacheToDelete) => {
-            return caches.delete(cacheToDelete);
-          })
-        );
-      })
-      .then(() => self.clients.claim())
+self.addEventListener("activate", (evt) => {
+  // remove old caches
+  evt.waitUntil(
+    caches.keys().then((keyList) => {
+      return Promise.all(
+        keyList.map((key) => {
+          if (key !== CACHE_NAME && key !== DATA_CACHE_NAME) {
+            return caches.delete(key);
+          }
+        })
+      );
+    })
   );
+
+  self.clients.claim();
 });
 
-self.addEventListener('fetch', (event) => {
-  if (event.request.url.startsWith(self.location.origin)) {
-    event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
-        if (cachedResponse) {
-          return cachedResponse;
-        }
+self.addEventListener("fetch", (evt) => {
+  // cache successful GET requests to the API
+  if (evt.request.url.includes("/api/") && evt.request.method === "GET") {
+    evt.respondWith(
+      caches
+        .open(DATA_CACHE_NAME)
+        .then((cache) => {
+          return fetch(evt.request)
+            .then((response) => {
+              // If the response was good, clone it and store it in the cache.
+              if (response.status === 200) {
+                cache.put(evt.request, response.clone());
+              }
 
-        return caches.open(RUNTIME).then((cache) => {
-          return fetch(event.request).then((response) => {
-            return cache.put(event.request, response.clone()).then(() => {
               return response;
+            })
+            .catch(() => {
+              // Network request failed, try to get it from the cache.
+              return cache.match(evt.request);
             });
-          });
-        });
-      })
+        })
+        .catch((err) => console.log(err))
     );
+
+    // stop execution of the fetch event callback
+    return;
   }
+
+  // if the request is not for the API, serve static assets using
+  // "offline-first" approach.
+  evt.respondWith(
+    caches.match(evt.request).then((response) => {
+      return response || fetch(evt.request);
+    })
+  );
 });
