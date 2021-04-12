@@ -17,7 +17,6 @@ self.addEventListener("install", (evt) => {
       return cache.addAll(FILES_TO_CACHE);
     })
   );
-
   self.skipWaiting();
 });
 
@@ -34,7 +33,6 @@ self.addEventListener("activate", (evt) => {
       );
     })
   );
-
   self.clients.claim();
 });
 
@@ -51,7 +49,6 @@ self.addEventListener("fetch", (evt) => {
               if (response.status === 200) {
                 cache.put(evt.request, response.clone());
               }
-
               return response;
             })
             .catch(() => {
@@ -61,11 +58,9 @@ self.addEventListener("fetch", (evt) => {
         })
         .catch((err) => console.log(err))
     );
-
     // stop execution of the fetch event callback
     return;
   }
-
   // if the request is not for the API, serve static assets using
   // "offline-first" approach.
   evt.respondWith(
