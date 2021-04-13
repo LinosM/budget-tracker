@@ -7,8 +7,8 @@ const FILES_TO_CACHE = [
   'https://stackpath.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css',
   './icons/icon-192x192.png',
   './icons/icon-512x512.png',
-  './dist/index.js',
-  './dist/db.js'
+  './index.js',
+  './db.js'
 ];
 
 self.addEventListener("install", (evt) => {
