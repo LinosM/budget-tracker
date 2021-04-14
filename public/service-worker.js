@@ -1,6 +1,7 @@
 const CACHE_NAME = "static-cache-v3";
 const DATA_CACHE_NAME = "data-cache-v2";
 
+
 const FILES_TO_CACHE = [
   '/index.html',
   './styles.css',
@@ -11,61 +12,68 @@ const FILES_TO_CACHE = [
   './dist/db.js'
 ];
 
-self.addEventListener("install", (evt) => {
+// Install
+self.addEventListener(`install`, evt => {
   evt.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(FILES_TO_CACHE);
-    })
+    caches
+    .open(CACHE_NAME)
+    .then(cache => cache.addAll(FILES_TO_CACHE))
+    .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
-self.addEventListener("activate", (evt) => {
-  // remove old caches
+// Activate
+self.addEventListener(`activate`, evt => {
+  const currentCaches = [CACHE_NAME, DATA_CACHE_NAME];
   evt.waitUntil(
-    caches.keys().then((keyList) => {
-      return Promise.all(
-        keyList.map((key) => {
-          if (key !== CACHE_NAME && key !== DATA_CACHE_NAME) {
-            return caches.delete(key);
-          }
-        })
-      );
-    })
+    caches
+    .keys()
+    .then(cacheNames =>
+      // return array of cache names that are old to delete
+      cacheNames.filter(cacheName => !currentCaches.includes(cacheName))
+    )
+    .then(cachesToDelete =>
+      Promise.all(
+        cachesToDelete.map(cacheToDelete => caches.delete(cacheToDelete))
+      )
+    )
+    .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-self.addEventListener("fetch", (evt) => {
-  // cache successful GET requests to the API
-  if (evt.request.url.includes("/api/") && evt.request.method === "GET") {
-    evt.respondWith(
-      caches
-        .open(DATA_CACHE_NAME)
-        .then((cache) => {
-          return fetch(evt.request)
-            .then((response) => {
-              // If the response was good, clone it and store it in the cache.
-              if (response.status === 200) {
-                cache.put(evt.request, response.clone());
-              }
-              return response;
-            })
-            .catch(() => {
-              // Network request failed, try to get it from the cache.
-              return cache.match(evt.request);
-            });
-        })
-        .catch((err) => console.log(err))
-    );
-    // stop execution of the fetch event callback
+// Fetch
+self.addEventListener(`fetch`, evt => {
+  if ( evt.request.method !== `GET` || !evt.request.url.startsWith(self.location.origin) ) {
+    evt.respondWith(fetch(evt.request));
     return;
   }
-  // if the request is not for the API, serve static assets using
-  // "offline-first" approach.
+
+  if (evt.request.url.includes(`/api/transaction`)) {
+    evt.respondWith(
+      caches.open(DATA_CACHE_NAME).then(cache =>
+        fetch(evt.request)
+          .then(res => {
+            cache.put(evt.request, res.clone());
+            return res;
+          })
+          .catch(() => caches.match(evt.request))
+      )
+    );
+    return;
+  }
+
   evt.respondWith(
-    caches.match(evt.request).then((response) => {
-      return response || fetch(evt.request);
+    caches.match(evt.request).then(cachedResponse => {
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      return caches
+      .open(DATA_CACHE_NAME)
+      .then(cache =>
+        fetch(evt.request).then(response =>
+          cache.put(evt.request, response.clone()).then(() => response)
+        )
+      );
     })
   );
 });
