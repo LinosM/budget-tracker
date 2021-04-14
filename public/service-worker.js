@@ -49,7 +49,6 @@ self.addEventListener(`fetch`, evt => {
     evt.respondWith(fetch(evt.request));
     return;
   }
-
   if (evt.request.url.includes(`/api/transaction`)) {
     evt.respondWith(
       caches.open(DATA_CACHE_NAME).then(cache =>
@@ -63,17 +62,16 @@ self.addEventListener(`fetch`, evt => {
     );
     return;
   }
-
   evt.respondWith(
-    caches.match(evt.request).then(cachedResponse => {
-      if (cachedResponse) {
-        return cachedResponse;
+    caches.match(evt.request).then(res => {
+      if (res) {
+        return res;
       }
       return caches
       .open(DATA_CACHE_NAME)
       .then(cache =>
-        fetch(evt.request).then(response =>
-          cache.put(evt.request, response.clone()).then(() => response)
+        fetch(evt.request).then(res =>
+          cache.put(evt.request, res.clone()).then(() => res)
         )
       );
     })
